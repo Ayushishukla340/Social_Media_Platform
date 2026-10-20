@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Connectly – Social Media Platform
 
 Node.js + Express + SQLite + JWT + Socket.IO + vanilla JS frontend.
@@ -22,3 +23,6 @@ aarav, priya, rohan, sneha (private) — password: demo1234
 - `routes/` – auth, users (follow, requests, privacy), posts, notifications, messages
 - `public/index.html` – complete frontend
 - `public/uploads/` – uploaded photos
+=======
+# Social_Media_Platform
+>>>>>>> 9c8ad97ebc41a84835d85012a2acb48305a987f1

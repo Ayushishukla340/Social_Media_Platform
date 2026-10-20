@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connectly</title>
+<style>
+:root{--bg:#f4f5fb;--card:#fff;--tx:#1c1d2b;--mu:#6b6f85;--ac:#6c4cf1;--ac2:#e84a8a;--bd:#e4e6f2}
+:root[data-theme="dark"]{--bg:#12131c;--card:#1c1e2b;--tx:#eceefb;--mu:#9a9eb8;--bd:#2c2f42}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,textarea{font:inherit;color:inherit}a{color:var(--ac);text-decoration:none}
+.btn{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;border:0;border-radius:999px;padding:8px 18px;cursor:pointer;font-weight:600}
+.btn.o{background:none;color:var(--tx);border:1px solid var(--bd)}.btn.sm{padding:5px 14px;font-size:13px}
+input,textarea{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;outline:none}
+input:focus,textarea:focus{border-color:var(--ac)}
+.auth{min-height:100vh;display:grid;place-items:center;padding:20px}
+.box{background:var(--card);border-radius:20px;padding:28px;width:100%;max-width:380px;border:1px solid var(--bd);display:grid;gap:12px}
+.logo{font-size:28px;font-weight:800;background:linear-gradient(135deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.app{max-width:1040px;margin:auto;display:grid;grid-template-columns:200px 1fr 260px;gap:18px;padding:16px}
+nav.side{position:sticky;top:16px;align-self:start;display:grid;gap:4px}
+nav.side button{background:none;border:0;text-align:left;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:500}
+nav.side button.on,nav.side button:hover{background:var(--card);color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center}.sp{flex:1}.mu{color:var(--mu);font-size:13px}
+.av{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;cursor:pointer;background:var(--bd)}.av.l{width:84px;height:84px}
+.post img.pi{width:100%;border-radius:12px;margin-top:8px;max-height:460px;object-fit:cover}
+.acts{display:flex;gap:6px;margin-top:10px}.acts button{background:none;border:0;cursor:pointer;padding:6px 10px;border-radius:999px;color:var(--mu)}
+.acts button:hover{background:var(--bg)}.acts .on{color:var(--ac2)}
+.cm{background:var(--bg);border-radius:12px;padding:6px 10px;margin-top:6px;font-size:14px}
+.badge{background:var(--ac2);color:#fff;border-radius:999px;font-size:11px;padding:1px 7px;margin-left:6px}
+.empty{text-align:center;color:var(--mu);padding:30px}
+.chat{display:grid;grid-template-columns:240px 1fr;gap:12px;height:70vh}
+.convs,.thread{background:var(--card);border:1px solid var(--bd);border-radius:16px;overflow:auto;display:flex;flex-direction:column}
+.conv{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--bd)}.conv:hover,.conv.on{background:var(--bg)}
+.msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:6px}
+.m{max-width:75%;padding:8px 12px;border-radius:16px;background:var(--bg);align-self:flex-start;word-break:break-word}
+.m.me{align-self:flex-end;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff}.m img{max-width:100%;border-radius:10px}
+.dot{width:9px;height:9px;border-radius:50%;background:#3ac47d;display:inline-block;margin-left:4px}
+#toast{position:fixed;top:16px;right:16px;background:var(--tx);color:var(--bg);padding:10px 16px;border-radius:12px;z-index:50;display:none;max-width:280px}
+@media(max-width:860px){.app{grid-template-columns:1fr;padding-bottom:70px}.right{display:none}.chat{grid-template-columns:1fr;height:auto}.convs{max-height:180px}.thread{height:60vh}
+nav.side{position:fixed;bottom:0;left:0;right:0;top:auto;grid-auto-flow:column;background:var(--card);border-top:1px solid var(--bd);padding:6px;z-index:5;gap:0}
+nav.side button{text-align:center;padding:8px 2px;font-size:11px}nav.side .logo{display:none}}
+</style></head><body><div id="root"></div><div id="toast"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let tok=localStorage.tok||'',me=null,view='feed',arg=null,sock=null,online=new Set(),P={},cm=new Set(),pg=1,chatU=null,chatId=null,msgs=[],typT=null,badge={n:0,m:0},reg=false;
+try{me=JSON.parse(localStorage.me)}catch(e){}
+if(localStorage.theme)document.documentElement.dataset.theme=localStorage.theme;
+const api=async(p,o={})=>{const h={};if(tok)h.Authorization='Bearer '+tok;let b=o.body;if(b&&!(b instanceof FormData)){h['Content-Type']='application/json';b=JSON.stringify(b)}
+const r=await fetch('/api'+p,{method:o.method||(b?'POST':'GET'),headers:h,body:b});const d=await r.json().catch(()=>({}));
+if(!r.ok){if(/token/i.test(d.error||''))logout();throw d}return d};
+const toast=t=>{const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',3000)};
+const err=e=>toast(e.error||'Something went wrong');
+const ago=t=>{const m=(Date.now()-new Date(String(t).replace(' ','T')+'Z'))/6e4;return m<1?'just now':m<60?Math.floor(m)+'m':m<1440?Math.floor(m/60)+'h':Math.floor(m/1440)+'d'};
+const img=u=>`<img class="av" src="${esc(u.avatar_url||'https://ui-avatars.com/api/?name='+encodeURIComponent(u.full_name||u.username))}" data-act="prof" data-u="${esc(u.username)}" alt="">`;
+async function upload(file){const f=new FormData();f.append('image',file);return (await api('/upload',{body:f})).url}
+
+/* ---------- AUTH ---------- */
+function authUI(e=''){$('#root').innerHTML=`<div class="auth"><div class="box"><div class="logo">Connectly</div><div class="mu">Connect with your friends.</div>
+${reg?'<input id="fn" placeholder="Full name"><input id="em" placeholder="Email" type="email">':''}<input id="un" placeholder="${reg?'Username':'Username or email'}" autocapitalize="none"><input id="pw" type="password" placeholder="Password">
+<div style="color:#e5484d;font-size:13px">${esc(e)}</div><button class="btn" data-act="auth">${reg?'Sign up':'Login'}</button>
+<a href="#" data-act="swap" style="text-align:center">${reg?'Have an account? Log in':'Create a new account'}</a></div></div>`}
+async function doAuth(){try{const un=$('#un').value,pw=$('#pw').value;
+const d=reg?await api('/auth/register',{body:{username:un,email:$('#em').value,password:pw,full_name:$('#fn').value}}):await api('/auth/login',{body:{identifier:un,password:pw}});
+tok=d.token;me=d.user;localStorage.tok=tok;localStorage.me=JSON.stringify(me);boot()}catch(e){authUI(e.error||'Failed')}}
+function logout(){tok='';me=null;localStorage.removeItem('tok');localStorage.removeItem('me');if(sock)sock.disconnect();sock=null;authUI()}
+
+/* ---------- SOCKET ---------- */
+function connect(){if(sock)sock.disconnect();sock=io({auth:{token:tok}});
+sock.on('online_list',l=>online=new Set(l));
+sock.on('presence',p=>{p.online?online.add(p.userId):online.delete(p.userId);if(view==='chat'&&chatId===p.userId)head()});
+sock.on('notification',n=>{badge.n++;nav();toast(n.full_name+' '+ntext(n));if(view==='notifs')notifs();});
+sock.on('message',m=>{const other=m.sender_id===me.id?m.receiver_id:m.sender_id;
+if(view==='chat'&&chatId===other){addMsg(m);if(m.sender_id!==me.id)api('/messages/with/'+chatU).catch(()=>{});convs()}
+else if(m.sender_id!==me.id){badge.m++;nav();toast('New message');if(view==='chat')convs()}});
+sock.on('messages_read',d=>{if(view==='chat'&&chatId===d.by){msgs.forEach(m=>{if(m.sender_id===me.id)m.is_read=1});drawMsgs()}});
+sock.on('typing',t=>{if(view==='chat'&&chatId===t.from){const e=$('#st');if(e)e.textContent=t.typing?'typing…':(online.has(chatId)?'online':'offline')}})}
+
+/* ---------- SHELL ---------- */
+async function boot(){connect();try{const u=await api('/users/'+me.username);me={...me,...u};localStorage.me=JSON.stringify(me)}catch(e){}
+try{badge.n=(await api('/notifications/unread-count')).count;badge.m=(await api('/messages/unread-count')).count}catch(e){}
+view='feed';shell()}
+function nav(){const t=[['feed','🏠 Home'],['explore','🔎 Explore'],['chat','💬 Chat',badge.m],['notifs','🔔 Alerts',badge.n],['saved','★ Saved'],['profile','👤 Profile'],['settings','⚙ Settings']];
+const el=$('nav.side');if(el)el.innerHTML=`<div class="logo" style="margin:8px 14px">Connectly</div>`+t.map(x=>`<button class="${view===x[0]?'on':''}" data-act="nav" data-v="${x[0]}">${x[1]}${x[2]?`<span class="badge">${x[2]}</span>`:''}</button>`).join('')}
+async function shell(){$('#root').innerHTML=`<div class="app"><nav class="side"></nav><main id="main"></main><aside class="right"><div class="card"><b>Suggested for you</b><div id="sug"></div></div></aside></div>`;nav();aside();route()}
+async function aside(){try{const l=await api('/users/suggestions/list');$('#sug').innerHTML=l.map(u=>`<div class="row" style="margin-top:10px">${img(u)}<div class="sp"><b>${esc(u.full_name)}</b><div class="mu">@${esc(u.username)}</div></div><button class="btn sm" data-act="fol" data-u="${esc(u.username)}">Follow</button></div>`).join('')||'<div class="mu" style="margin-top:8px">No suggestions yet.</div>'}catch(e){}}
+function go(v,a=null){view=v;arg=a;nav();route()}
+function route(){({feed,explore,chat:chatView,notifs,saved,profile,settings,list})[view]()}
+
+/* ---------- POSTS ---------- */
+function postHTML(p){P[p.id]=p;const own=p.user_id===me.id;
+return `<div class="card post" id="p${p.id}"><div class="row">${img(p)}<div><b>${esc(p.full_name)}</b><div class="mu">@${esc(p.username)} · ${ago(p.created_at)}</div></div><span class="sp"></span>${own?`<button class="btn o sm" data-act="del" data-id="${p.id}">Delete</button>`:''}</div>
+<p>${esc(p.content).replace(/#(\w+)/g,'<a href="#" data-act="tag" data-t="$1">#$1</a>')}</p>${p.image_url?`<img class="pi" src="${esc(p.image_url)}" alt="">`:''}
+<div class="acts"><button class="${p.is_liked?'on':''}" data-act="like" data-id="${p.id}">${p.is_liked?'♥':'♡'} ${p.likes_count}</button><button data-act="cm" data-id="${p.id}">💬 ${p.comments_count}</button><button class="${p.is_saved?'on':''}" data-act="sv" data-id="${p.id}">${p.is_saved?'★':'☆'} Save</button></div>
+<div id="c${p.id}">${cm.has(p.id)?'<div class="mu">Loading…</div>':''}</div></div>`}
+const redraw=id=>{const e=$('#p'+id);if(e){e.outerHTML=postHTML(P[id]);if(cm.has(id))loadCm(id)}};
+async function loadCm(id){try{const l=await api(`/posts/${id}/comments`);$('#c'+id).innerHTML=l.map(c=>`<div class="cm"><b>@${esc(c.username)}</b> ${esc(c.content)}${c.user_id===me.id?` <a href="#" data-act="delcm" data-id="${id}" data-c="${c.id}">✕</a>`:''}</div>`).join('')+`<div class="row" style="margin-top:8px"><input id="ci${id}" placeholder="Write a comment..."><button class="btn sm" data-act="addcm" data-id="${id}">Post</button></div>`}catch(e){}}
+const plist=l=>l.length?l.map(postHTML).join(''):'<div class="empty">Nothing here yet.</div>';
+
+async function feed(more){if(!more){pg=1;$('#main').innerHTML=`<div class="card"><textarea id="pt" rows="2" placeholder="What's on your mind?"></textarea><div class="row" style="margin-top:8px"><label class="btn o sm" style="cursor:pointer">📷 Photo<input id="pf" type="file" accept="image/*" hidden></label><span class="mu" id="pn"></span><span class="sp"></span><button class="btn sm" data-act="post">Post</button></div></div><div id="fl"></div><div class="row" style="justify-content:center"><button class="btn o sm" id="lm" data-act="more">Load more</button></div>`;
+$('#pf').onchange=e=>$('#pn').textContent=e.target.files[0]?.name||''}
+try{const l=await api('/posts/feed?page='+pg);$('#fl').insertAdjacentHTML('beforeend',l.length||pg>1?l.map(postHTML).join(''):'<div class="empty">Your feed is empty. Follow someone or write your first post!</div>');if(l.length<10)$('#lm').style.display='none'}catch(e){err(e)}}
+async function explore(){const q=arg||'';$('#main').innerHTML=`<input id="q" placeholder="Search users, posts, #hashtags" value="${esc(q)}" style="margin-bottom:14px"><div id="ex"></div>`;
+const run=async()=>{const v=$('#q').value.trim();try{const [us,ps]=await Promise.all([v?api('/users/search/users?q='+encodeURIComponent(v.replace('#',''))):[],api('/posts/explore?q='+encodeURIComponent(v))]);
+$('#ex').innerHTML=us.map(u=>`<div class="card row">${img(u)}<div><b>${esc(u.full_name)}</b>${u.is_private?' 🔒':''}<div class="mu">@${esc(u.username)}</div></div></div>`).join('')+plist(ps)}catch(e){err(e)}};
+let t;$('#q').oninput=()=>{clearTimeout(t);t=setTimeout(()=>{arg=$('#q').value;run()},300)};run()}
+async function saved(){$('#main').innerHTML='<h3>Saved posts</h3><div id="sv"></div>';try{$('#sv').innerHTML=plist(await api('/posts/saved/list'))}catch(e){err(e)}}
+
+/* ---------- NOTIFICATIONS ---------- */
+const ntext=n=>({like:'liked your post',comment:'commented: '+(n.message||''),follow:'started following you',follow_request:'sent you a follow request',follow_accept:'accepted your follow request'}[n.type]||n.type);
+async function notifs(){try{const [rq,l]=await Promise.all([api('/users/me/requests'),api('/notifications')]);
+$('#main').innerHTML='<h3>Notifications</h3>'+(rq.length?`<div class="card"><b>Follow requests</b>${rq.map(r=>`<div class="row" style="margin-top:10px">${img(r)}<div class="sp"><b>${esc(r.full_name)}</b><div class="mu">@${esc(r.username)}</div></div><button class="btn sm" data-act="acc" data-id="${r.id}">Accept</button><button class="btn o sm" data-act="rej" data-id="${r.id}">Reject</button></div>`).join('')}</div>`:'')
++(l.map(n=>`<div class="card row" style="${n.is_read?'':'border-color:var(--ac)'}">${img(n)}<div><b>${esc(n.full_name)}</b> ${esc(ntext(n))}<div class="mu">${ago(n.created_at)}</div></div></div>`).join('')||'<div class="empty">No notifications yet.</div>');
+await api('/notifications/read-all',{method:'POST'});badge.n=0;nav()}catch(e){err(e)}}
+
+/* ---------- PROFILE ---------- */
+async function profile(){const un=arg||me.username;try{const u=await api('/users/'+un);let ps=[];if(u.can_view)ps=await api(`/users/${un}/posts`);
+const rel={following:['Following','o'],requested:['Requested','o'],none:['Follow','']}[u.relation];
+$('#main').innerHTML=`<div class="card"><div class="row"><img class="av l" src="${esc(u.avatar_url)}" alt=""><div class="sp"><h3 style="margin:0">${esc(u.full_name)} ${u.is_private?'🔒':''}</h3><div class="mu">@${esc(u.username)}${u.location?' · '+esc(u.location):''}</div><p>${esc(u.bio)}</p>
+<div class="mu"><b>${u.posts_count}</b> posts · <a href="#" data-act="lst" data-u="${esc(un)}" data-k="followers"><b>${u.followers_count}</b> followers</a> · <a href="#" data-act="lst" data-u="${esc(un)}" data-k="following"><b>${u.following_count}</b> following</a></div></div>
+<div style="display:grid;gap:6px">${u.is_me?'<button class="btn o sm" data-act="edit">Edit profile</button>':`<button class="btn ${rel[1]} sm" data-act="fol" data-u="${esc(un)}">${rel[0]}</button><button class="btn o sm" data-act="msg" data-u="${esc(un)}">Message</button>`}</div></div><div id="ef"></div></div>`
++(u.can_view?plist(ps):'<div class="empty">🔒 This account is private. Send a follow request to see their posts.</div>')}catch(e){$('#main').innerHTML='<div class="empty">'+esc(e.error||'Error')+'</div>'}}
+function editForm(){$('#ef').innerHTML=`<hr style="border-color:var(--bd)"><div style="display:grid;gap:8px"><input id="e1" value="${esc(me.full_name)}" placeholder="Full name"><textarea id="e2" rows="2" placeholder="Bio">${esc(me.bio)}</textarea><input id="e3" value="${esc(me.location)}" placeholder="Location"><input id="e4" value="${esc(me.website)}" placeholder="Website">
+<label class="mu">Profile photo: <input id="e5" type="file" accept="image/*"></label><button class="btn sm" data-act="saveprof">Save</button></div>`}
+async function list(){const{u,k}=arg;try{const l=await api(`/users/${u}/${k}`);$('#main').innerHTML=`<h3>@${esc(u)} · ${k}</h3>`+(l.map(x=>`<div class="card row">${img(x)}<div><b>${esc(x.full_name)}</b><div class="mu">@${esc(x.username)}</div></div></div>`).join('')||'<div class="empty">No one yet.</div>')}catch(e){$('#main').innerHTML='<div class="empty">'+esc(e.error||'Error')+'</div>'}}
+function settings(){const dark=document.documentElement.dataset.theme==='dark';$('#main').innerHTML=`<div class="card"><h3>Settings</h3><div class="row"><span>Dark mode</span><span class="sp"></span><button class="btn o sm" data-act="dark">${dark?'On':'Off'}</button></div><hr style="border-color:var(--bd)">
+<div class="row"><span>Private account</span><span class="sp"></span><button class="btn o sm" data-act="priv">${me.is_private?'On 🔒':'Off'}</button></div><hr style="border-color:var(--bd)"><div class="row"><span>Logout</span><span class="sp"></span><button class="btn sm" data-act="logout">Logout</button></div></div>`}
+
+/* ---------- CHAT ---------- */
+function chatView(){$('#main').innerHTML=`<div class="chat"><div class="convs"><div style="padding:10px"><input id="nc" placeholder="Start a chat by username ↵"></div><div id="cv"></div></div><div class="thread" id="th"><div class="empty">Select a chat.</div></div></div>`;
+$('#nc').onkeydown=e=>{if(e.key==='Enter'&&e.target.value.trim())openChat(e.target.value.trim().toLowerCase())};convs();if(arg)openChat(arg)}
+async function convs(){try{const l=await api('/messages/conversations');const e=$('#cv');if(e)e.innerHTML=l.map(c=>`<div class="conv ${c.username===chatU?'on':''}" data-act="open" data-u="${esc(c.username)}"><img class="av" src="${esc(c.avatar_url)}" alt=""><div class="sp"><b>${esc(c.full_name)}${online.has(c.id)?'<span class="dot"></span>':''}</b><div class="mu">${esc((c.last_message||'📷 Photo').slice(0,28))}</div></div>${c.unread?`<span class="badge">${c.unread}</span>`:''}</div>`).join('')||'<div class="empty">No chats yet.</div>'}catch(e){}}
+async function openChat(u){try{const r=await api('/messages/with/'+u);chatU=r.user.username;chatId=r.user.id;msgs=r.messages;
+$('#th').innerHTML=`<div class="row" style="padding:10px 12px;border-bottom:1px solid var(--bd)"><img class="av" src="${esc(r.user.avatar_url)}" alt=""><div><b>${esc(r.user.full_name)}</b><div class="mu" id="st"></div></div></div><div class="msgs" id="ms"></div>
+<div class="row" style="padding:10px"><label style="cursor:pointer">📎<input id="mf" type="file" accept="image/*" hidden></label><input id="mi" placeholder="Write a message..." autocomplete="off"><button class="btn sm" data-act="send">Send</button></div>`;
+head();drawMsgs();badge.m=Math.max(0,(await api('/messages/unread-count')).count);nav();convs();
+$('#mi').oninput=()=>{sock&&sock.emit('typing',{to:chatId,typing:true});clearTimeout(typT);typT=setTimeout(()=>sock&&sock.emit('typing',{to:chatId,typing:false}),1500)};
+$('#mi').onkeydown=e=>{if(e.key==='Enter')send()};
+$('#mf').onchange=async e=>{const f=e.target.files[0];if(f)try{await api('/messages/to/'+chatU,{body:{image_url:await upload(f)}})}catch(x){err(x)}}}catch(e){err(e)}}
+const head=()=>{const e=$('#st');if(e)e.textContent=online.has(chatId)?'online':'offline'};
+function drawMsgs(){const e=$('#ms');if(!e)return;e.innerHTML=msgs.map(m=>`<div class="m ${m.sender_id===me.id?'me':''}">${m.image_url?`<img src="${esc(m.image_url)}" alt="">`:''}${esc(m.content)}${m.sender_id===me.id?`<div style="font-size:10px;opacity:.8;text-align:right">${m.is_read?'✓✓':'✓'}</div>`:''}</div>`).join('');e.scrollTop=e.scrollHeight}
+function addMsg(m){if(!msgs.some(x=>x.id===m.id)){msgs.push(m);drawMsgs()}}
+async function send(){const i=$('#mi'),v=i.value.trim();if(!v)return;i.value='';try{const m=await api('/messages/to/'+chatU,{body:{content:v}});addMsg(m);convs()}catch(e){err(e)}}
+
+/* ---------- EVENTS ---------- */
+document.addEventListener('click',async e=>{const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act,id=t.dataset.id,u=t.dataset.u;if(t.tagName==='A')e.preventDefault();
+try{
+if(a==='swap'){reg=!reg;return authUI()}if(a==='auth')return doAuth();
+if(a==='nav')return go(t.dataset.v);if(a==='prof')return go('profile',u);if(a==='tag')return go('explore','#'+t.dataset.t);
+if(a==='lst')return go('list',{u,k:t.dataset.k});if(a==='msg'){return go('chat',u)}if(a==='open')return openChat(u);if(a==='send')return send();
+if(a==='logout')return logout();
+if(a==='dark'){const d=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=d;localStorage.theme=d;return settings()}
+if(a==='priv'){me=await api('/users/me/update',{method:'PUT',body:{is_private:!me.is_private}});localStorage.me=JSON.stringify(me);return settings()}
+if(a==='edit')return editForm();
+if(a==='saveprof'){const f=$('#e5').files[0],b={full_name:$('#e1').value,bio:$('#e2').value,location:$('#e3').value,website:$('#e4').value};if(f)b.avatar_url=await upload(f);
+me=await api('/users/me/update',{method:'PUT',body:b});localStorage.me=JSON.stringify(me);toast('Profile updated');return go('profile',me.username)}
+if(a==='post'){const c=$('#pt').value.trim();if(!c)return toast('Write something first');const f=$('#pf').files[0];const body={content:c};if(f)body.image_url=await upload(f);await api('/posts',{body});return feed()}
+if(a==='more'){pg++;return feed(true)}
+if(a==='del'){if(!confirm('Delete this post?'))return;await api('/posts/'+id,{method:'DELETE'});$('#p'+id)?.remove();return}
+if(a==='like'){const r=await api(`/posts/${id}/like`,{method:'POST'});Object.assign(P[id],{is_liked:r.liked,likes_count:r.likes_count});return redraw(id)}
+if(a==='sv'){const r=await api(`/posts/${id}/save`,{method:'POST'});P[id].is_saved=r.saved;return view==='saved'&&!r.saved?$('#p'+id).remove():redraw(id)}
+if(a==='cm'){cm.has(id)?cm.delete(id):cm.add(id);return redraw(id)}
+if(a==='addcm'){const el=$('#ci'+id),v=el.value.trim();if(!v)return;await api(`/posts/${id}/comments`,{body:{content:v}});P[id].comments_count++;return redraw(id)}
+if(a==='delcm'){await api(`/posts/${id}/comments/${t.dataset.c}`,{method:'DELETE'});P[id].comments_count--;return redraw(id)}
+if(a==='fol'){const r=await api(`/users/${u}/follow`,{method:'POST'});toast(r.message);aside();return ['profile','explore'].includes(view)?route():view==='feed'?null:null}
+if(a==='acc'||a==='rej'){await api(`/users/requests/${id}/${a==='acc'?'accept':'reject'}`,{method:'POST'});return notifs()}
+}catch(x){err(x)}});
+tok&&me?boot():authUI();
+</script></body></html>
